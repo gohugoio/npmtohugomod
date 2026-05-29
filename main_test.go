@@ -2,34 +2,90 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/bep/helpers/envhelpers"
 	"github.com/rogpeppe/go-internal/testscript"
 )
 
 func TestScripts(t *testing.T) {
-	setup := testSetupFunc()
-	testscript.Run(t, testscript.Params{
-		Dir: "testscripts",
-		// UpdateScripts: true, // Uncomment to rewrite the test scripts with
-		// TestWork: true, // Uncomment to keep the test work dir.
-		Setup: func(env *testscript.Env) error {
-			return setup(env)
-		},
-	})
+	params := commonTestScriptsParam
+	params.Dir = "testscripts"
+	// params.TestWork = true
+	// params.UpdateScripts = true
+	testscript.Run(t, params)
 }
 
 func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){
-		"gomaintemplate": func() {
-			fmt.Println(strings.Join(os.Args[1:], " "))
-			time.Sleep(10 * time.Millisecond)
-		},
+		"npmtohugomod": main,
 	})
+}
+
+var commonTestScriptsParam = testscript.Params{
+	Setup: func(env *testscript.Env) error {
+		setup := testSetupFunc()
+		return setup(env)
+	},
+	Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
+		// tree lists a directory recursively to stdout as a simple tree.
+		"tree": func(ts *testscript.TestScript, neg bool, args []string) {
+			dirname := ts.MkAbs(args[0])
+
+			err := filepath.WalkDir(dirname, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !d.IsDir() {
+					return nil
+				}
+				if d.Name() == ".git" {
+					return filepath.SkipDir
+				}
+				entries, err := os.ReadDir(path)
+				if err != nil {
+					return err
+				}
+				nodeType := "unknown"
+				for _, entry := range entries {
+					if !entry.IsDir() && entry.Name() == "gitjoin.txt" {
+						nodeType = "gitjoin"
+						break
+					}
+					if entry.IsDir() && entry.Name() == ".git" {
+						nodeType = "git"
+						break
+					}
+				}
+				rel, err := filepath.Rel(dirname, path)
+				if err != nil {
+					return err
+				}
+				if rel == "." {
+					fmt.Fprintf(ts.Stdout(), ". (%s)\n", nodeType)
+					return nil
+				}
+				depth := strings.Count(rel, string(os.PathSeparator))
+				prefix := strings.Repeat("  ", depth) + "└─"
+				if d.IsDir() {
+					fmt.Fprintf(ts.Stdout(), "%s%s:%s/\n", prefix, nodeType, d.Name())
+				} else {
+					fmt.Fprintf(ts.Stdout(), "%s%s:%s\n", prefix, nodeType, d.Name())
+				}
+				if nodeType == "git" {
+					return filepath.SkipDir
+				}
+				return nil
+			})
+			if err != nil {
+				ts.Fatalf("%v", err)
+			}
+		},
+	},
 }
 
 func testSetupFunc() func(env *testscript.Env) error {

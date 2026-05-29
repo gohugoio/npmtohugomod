@@ -1,0 +1,130 @@
+# Packages here have their ESM build at the top level of dist/ (e.g.
+# dist/module.esm.js) rather than in a dist/esm/ subdirectory, so we fall back
+# to mounting the whole dist/ directory based on the package.json "module" field.
+#
+# Note also that an unscoped "alpinejs" and a scoped "@alpinejs/X" coexist as
+# nested Hugo/Go modules ("@" is stripped from module paths).
+
+npmtohugomod --module-base example.com/test
+
+! stderr .
+
+exists alpinejs/focus/package/dist/module.esm.js
+exists alpinejs/persist/package/dist/module.esm.js
+exists hotwired/turbo/package/dist/turbo.es2017-esm.js
+exists alpinejs/package/dist/module.esm.js
+
+cmp alpinejs/focus/hugo.toml golden/alpinejs/focus/hugo.toml
+cmp alpinejs/persist/hugo.toml golden/alpinejs/persist/hugo.toml
+cmp hotwired/turbo/hugo.toml golden/hotwired/turbo/hugo.toml
+cmp alpinejs/hugo.toml golden/alpinejs/hugo.toml
+
+# go.mod files are created by `hugo mod init`. Assert each module line.
+grep '^module example.com/test/alpinejs/focus$' alpinejs/focus/go.mod
+grep '^module example.com/test/alpinejs/persist$' alpinejs/persist/go.mod
+grep '^module example.com/test/hotwired/turbo$' hotwired/turbo/go.mod
+grep '^module example.com/test/alpinejs$' alpinejs/go.mod
+
+# Idempotency: re-running with the same package.json should be a no-op
+# (in particular it must not fail on `hugo mod init` complaining about an
+# existing go.mod).
+npmtohugomod --module-base example.com/test
+! stderr .
+grep '"version": "v3.15.3"' alpinejs/npmpackage.json
+
+# Version bump: change alpinejs from 3.15.3 to 3.15.12 and re-run. The bumped
+# package must update; the other (unchanged) dependencies must be left alone.
+cp package-bumped.json package.json
+npmtohugomod --module-base example.com/test
+! stderr .
+
+grep '"version": "v3.15.12"' alpinejs/npmpackage.json
+exists alpinejs/package/dist/module.esm.js
+exists alpinejs/go.mod
+
+grep '"version": "v3.15.3"' alpinejs/focus/npmpackage.json
+grep '"version": "v3.15.3"' alpinejs/persist/npmpackage.json
+grep '"version": "v8.0.20"' hotwired/turbo/npmpackage.json
+
+# This is a copy-paste-of https://github.com/gohugoio/hugoDocs/blob/master/package.json
+# We skip the devDependencies, which is what we would want.
+-- package.json --
+{
+  "name": "hugoDocs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "",
+  "devDependencies": {
+    "@tailwindcss/cli": "~4.1.18",
+    "@tailwindcss/typography": "~0.5.19",
+    "prettier": "~3.7.4",
+    "tailwindcss": "~4.1.18"
+  },
+  "dependencies": {
+    "@alpinejs/focus": "3.15.3",
+    "@alpinejs/persist": "3.15.3",
+    "@hotwired/turbo": "8.0.20",
+    "alpinejs": "3.15.3"
+  }
+}
+-- golden/alpinejs/focus/hugo.toml --
+[[module.mounts]]
+  source = "package/dist"
+  target = "assets/@alpinejs/focus"
+
+[[module.mounts]]
+  source = "package/dist/module.esm.js"
+  target = "assets/@alpinejs/focus/index.esm.js"
+-- golden/alpinejs/persist/hugo.toml --
+[[module.mounts]]
+  source = "package/dist"
+  target = "assets/@alpinejs/persist"
+
+[[module.mounts]]
+  source = "package/dist/module.esm.js"
+  target = "assets/@alpinejs/persist/index.esm.js"
+-- golden/hotwired/turbo/hugo.toml --
+[[module.mounts]]
+  source = "package/dist"
+  target = "assets/@hotwired/turbo"
+
+[[module.mounts]]
+  source = "package/dist/turbo.es2017-esm.js"
+  target = "assets/@hotwired/turbo/index.esm.js"
+-- golden/alpinejs/hugo.toml --
+[[module.mounts]]
+  source = "package/dist"
+  target = "assets/alpinejs"
+
+[[module.mounts]]
+  source = "package/dist/module.esm.js"
+  target = "assets/alpinejs/index.esm.js"
+-- package-bumped.json --
+{
+  "name": "hugoDocs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "",
+  "devDependencies": {
+    "@tailwindcss/cli": "~4.1.18",
+    "@tailwindcss/typography": "~0.5.19",
+    "prettier": "~3.7.4",
+    "tailwindcss": "~4.1.18"
+  },
+  "dependencies": {
+    "@alpinejs/focus": "3.15.3",
+    "@alpinejs/persist": "3.15.3",
+    "@hotwired/turbo": "8.0.20",
+    "alpinejs": "3.15.12"
+  }
+}

@@ -1,0 +1,47 @@
+# Fetch all dependencies (1) defined in package.json and create a hugo.toml config with one suitable mount.
+npmtohugomod --module-base example.com/test
+
+! stderr .
+
+exists popperjs/core/package/dist/esm/index.js
+
+cmp popperjs/core/npmpackage.json golden/popperjs/core/npmpackage.json
+cmp popperjs/core/hugo.toml golden/popperjs/core/hugo.toml
+
+# go.mod is created by `hugo mod init`. The Go version line varies with the
+# local Hugo install, so we only assert the module line.
+grep '^module example.com/test/popperjs/core$' popperjs/core/go.mod
+
+# We read dependencies section only
+# We ignore any version range syntax, fetch specific versions only.
+-- package.json --
+{
+  "name": "npmtest",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@popperjs/core": "^2.11.3"
+  }
+}
+
+-- golden/popperjs/core/npmpackage.json --
+{
+  "name": "@popperjs/core",
+  "version": "v2.11.3",
+  "dependencies": null,
+  "dist": {
+    "shasum": "f327fcb4f2576bf0b0ea0e65e773495cdf40188b",
+    "tarball": "https://registry.npmjs.org/@popperjs/core/-/core-2.11.3.tgz"
+  }
+}
+-- golden/popperjs/core/hugo.toml --
+[[module.mounts]]
+  source = "package/dist/esm"
+  target = "assets/@popperjs/core"
