@@ -20,10 +20,10 @@ cmp hotwired/turbo/hugo.toml golden/hotwired/turbo/hugo.toml
 cmp alpinejs/hugo.toml golden/alpinejs/hugo.toml
 
 # go.mod files are created by `hugo mod init`. Assert each module line.
-grep '^module example.com/test/alpinejs/focus$' alpinejs/focus/go.mod
-grep '^module example.com/test/alpinejs/persist$' alpinejs/persist/go.mod
-grep '^module example.com/test/hotwired/turbo$' hotwired/turbo/go.mod
-grep '^module example.com/test/alpinejs$' alpinejs/go.mod
+grep '^module example.com/test/alpinejs/focus/v3$' alpinejs/focus/go.mod
+grep '^module example.com/test/alpinejs/persist/v3$' alpinejs/persist/go.mod
+grep '^module example.com/test/hotwired/turbo/v8$' hotwired/turbo/go.mod
+grep '^module example.com/test/alpinejs/v3$' alpinejs/go.mod
 
 # Idempotency: re-running with the same package.json should be a no-op
 # (in particular it must not fail on `hugo mod init` complaining about an

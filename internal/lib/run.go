@@ -9,7 +9,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 )
 
 func Run(cfg Config) error {
@@ -86,9 +90,12 @@ func detectModuleBase(dir string) (string, error) {
 
 func processDependency(cfg Config, dep Dependency) error {
 	requestedVersion := normalizeSemver(stripRangePrefix(dep.VersionRange))
-	relModulePath := npmNameToModulePath(dep.Name)
-	modulePath := path.Join(cfg.ModuleBase, relModulePath)
-	outDir := filepath.Join(cfg.BaseOutputDir, filepath.FromSlash(relModulePath))
+	relPath := npmNameToModulePath(dep.Name)
+	// Go's semantic import versioning: majors >= 2 must have a "/vN" suffix
+	// in the module path. We apply it only to the go.mod module line, keeping
+	// the source tree flat so its git history tracks across major bumps.
+	modulePath := path.Join(cfg.ModuleBase, relPath, majorVersionSuffix(requestedVersion))
+	outDir := filepath.Join(cfg.BaseOutputDir, filepath.FromSlash(relPath))
 
 	// Idempotency: if npmpackage.json already records the requested version,
 	// nothing on disk needs to change. We don't even hit the npm registry.
@@ -132,13 +139,37 @@ func processDependency(cfg Config, dep Dependency) error {
 		return err
 	}
 
-	// `hugo mod init` refuses to overwrite an existing go.mod. The module path
-	// is derived from the package name (not the version), so once written it
-	// never needs to change on a version bump.
-	if _, err := os.Stat(filepath.Join(outDir, "go.mod")); err == nil {
-		return nil
+	// `hugo mod init` refuses to overwrite an existing go.mod. If one already
+	// exists, rewrite just the module statement if needed — that handles a
+	// major-version bump that changes the "/vN" suffix without touching any
+	// require/replace lines the user may have added.
+	goModPath := filepath.Join(outDir, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		return ensureGoModModulePath(goModPath, modulePath)
 	}
 	return runHugoModInit(outDir, modulePath)
+}
+
+func ensureGoModModulePath(path, want string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	f, err := modfile.Parse(path, b, nil)
+	if err != nil {
+		return err
+	}
+	if f.Module != nil && f.Module.Mod.Path == want {
+		return nil
+	}
+	if err := f.AddModuleStmt(want); err != nil {
+		return err
+	}
+	out, err := f.Format()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }
 
 func readNpmPackageVersion(outDir string) (string, bool) {
@@ -153,6 +184,21 @@ func readNpmPackageVersion(outDir string) (string, bool) {
 		return "", false
 	}
 	return p.Version, p.Version != ""
+}
+
+// majorVersionSuffix returns "vN" when version's major is >= 2, matching
+// Go's semantic import versioning. v0 and v1 share the unsuffixed module
+// path, so it returns "" for those (and for an unparseable version).
+func majorVersionSuffix(version string) string {
+	major := semver.Major(version)
+	if major == "" {
+		return ""
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(major, "v"))
+	if err != nil || n < 2 {
+		return ""
+	}
+	return major
 }
 
 // npmNameToModulePath converts an npm package name to a Go/Hugo module path.

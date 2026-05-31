@@ -10,7 +10,7 @@ cmp popperjs/core/hugo.toml golden/popperjs/core/hugo.toml
 
 # go.mod is created by `hugo mod init`. The Go version line varies with the
 # local Hugo install, so we only assert the module line.
-grep '^module example.com/test/popperjs/core$' popperjs/core/go.mod
+grep '^module example.com/test/popperjs/core/v2$' popperjs/core/go.mod
 
 # We read dependencies section only
 # We ignore any version range syntax, fetch specific versions only.
